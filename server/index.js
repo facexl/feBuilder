@@ -413,8 +413,6 @@ const runCommand = (command, args, { cwd, timeoutMs = 20000 } = {}) =>
     });
   });
 
-const escapeShellValue = (value) => String(value).replace(/'/g, `'\\''`);
-
 const parseGitBranchName = (line) => {
   const ref = line.trim().split(/\s+/)[1] || '';
   return ref.replace(/^refs\/heads\//, '');
@@ -485,7 +483,77 @@ const startProjectExecution = async ({
   return execution;
 };
 
+const isWindows = process.platform === 'win32';
+
+const escapeShellValue = (value) => {
+  if (isWindows) {
+    return String(value || '').replace(/'/g, "''");
+  }
+  return String(value || '').replace(/'/g, "'\\''");
+};
+
 const buildEnvironmentBootstrapScript = (project) => {
+  if (isWindows) {
+    // Windows PowerShell 脚本
+    const lines = [
+      `$ErrorActionPreference = 'Stop'`,
+      `$env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('PATH', 'User')`,
+    ];
+
+    // nvm-windows 支持
+    lines.push(
+      `if (!(Get-Command nvm -ErrorAction SilentlyContinue)) {`,
+      `  Write-Error 'nvm 未安装，请先安装 nvm-windows (https://github.com/coreybutler/nvm-windows)'`,
+      `  exit 1`,
+      `}`
+    );
+
+    lines.push(
+      `nvm install ${escapeShellValue(project.nodeVersion)}`,
+      `nvm use ${escapeShellValue(project.nodeVersion)}`,
+      `node -v`,
+      `npm -v`
+    );
+
+    if (project.packageManager === 'pnpm') {
+      lines.push(
+        `if (!(Get-Command pnpm -ErrorAction SilentlyContinue)) {`,
+        `  Write-Host 'pnpm 未安装，正在安装...'`,
+        `  if (Get-Command corepack -ErrorAction SilentlyContinue) {`,
+        `    corepack enable`,
+        `    corepack prepare pnpm@latest --activate`,
+        `  } else {`,
+        `    npm install -g pnpm`,
+        `  }`,
+        `}`,
+        `pnpm -v`
+      );
+    }
+
+    if (project.packageManager === 'yarn') {
+      lines.push(
+        `if (!(Get-Command yarn -ErrorAction SilentlyContinue)) {`,
+        `  Write-Host 'yarn 未安装，正在安装...'`,
+        `  if (Get-Command corepack -ErrorAction SilentlyContinue) {`,
+        `    corepack enable`,
+        `    corepack prepare yarn@stable --activate`,
+        `  } else {`,
+        `    npm install -g yarn`,
+        `  }`,
+        `}`,
+        `yarn -v`
+      );
+    }
+
+    if (project.packageManager === 'npm') {
+      lines.push(`npm -v`);
+    }
+
+    lines.push(project.script);
+    return lines.join('\n');
+  }
+
+  // Linux/Mac bash 脚本
   const lines = [
     'set -e',
     'if [ -z "$HOME" ]; then',
@@ -753,12 +821,16 @@ const executeProjectScript = async (project, user) => {
   await fs.mkdir(tempDir, { recursive: true });
   appendExecutionLog(
     execution,
-    `[${new Date().toISOString()}] 准备执行脚本\n临时目录：${tempDir}\n项目类型：${project.type}\nNode.js：${project.nodeVersion}\n包管理工具：${project.packageManager}\n\n`
+    `[${new Date().toISOString()}] 准备执行脚本\n临时目录：${tempDir}\n项目类型：${project.type}\nNode.js：${project.nodeVersion}\n包管理工具：${project.packageManager}\n操作系统：${isWindows ? 'Windows' : 'Unix'}\n\n`
   );
+
+  const shellOptions = isWindows
+    ? { shell: 'powershell.exe', shellArgs: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command'] }
+    : { shell: true };
 
   const child = spawn(buildEnvironmentBootstrapScript(project), {
     cwd: tempDir,
-    shell: true,
+    ...shellOptions,
     env: process.env,
   });
   runtime.child = child;
