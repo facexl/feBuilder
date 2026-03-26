@@ -1,4 +1,4 @@
-# Flow - 云打包工具
+# feBuilder - 云打包工具
 
 一个用于管理和执行 Node.js 项目构建脚本的 Web 工具，支持自动轮询 Git 仓库触发构建。
 
@@ -31,7 +31,7 @@
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd flow
+cd feBuilder
 
 # 安装依赖
 pnpm install
@@ -103,7 +103,7 @@ const MAX_CONCURRENT_EXECUTIONS = 5;
 ## 项目结构
 
 ```
-flow/
+feBuilder/
 ├── src/                    # 前端源码
 │   ├── App.vue            # 主应用组件
 │   ├── main.js            # 入口文件
