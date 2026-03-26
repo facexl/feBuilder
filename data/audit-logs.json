@@ -1,0 +1,20 @@
+[
+  {
+    "id": "audit_1774504124580_ef39cdb0",
+    "actorAccount": "admin",
+    "action": "login",
+    "targetType": "session",
+    "targetId": "577c6f32-1703-4437-867b-a3992a85c221",
+    "detail": "用户登录",
+    "createdAt": "2026-03-26T05:48:44.581Z"
+  },
+  {
+    "id": "audit_1774504117081_5cc6f9af",
+    "actorAccount": "admin",
+    "action": "logout",
+    "targetType": "session",
+    "targetId": "45c54099-8ef5-411c-b590-e1f31757f3d3",
+    "detail": "用户退出登录",
+    "createdAt": "2026-03-26T05:48:37.081Z"
+  }
+]
