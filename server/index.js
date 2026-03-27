@@ -485,37 +485,10 @@ const startProjectExecution = async ({
 
 const isWindows = process.platform === 'win32';
 
-const shellCommand = isWindows ? 'cmd' : 'bash';
-const shellArgs = isWindows ? ['/c'] : ['-c'];
-
 const buildEnvironmentBootstrapScript = (project) => {
   if (isWindows) {
-    // Windows: 直接使用系统已安装的 Node.js，不依赖 nvm
-    const lines = [
-      `node -v`,
-      `npm -v`,
-    ];
-
-    if (project.packageManager === 'pnpm') {
-      lines.push(
-        `where pnpm >nul 2>&1 || npm install -g pnpm`,
-        `pnpm -v`
-      );
-    }
-
-    if (project.packageManager === 'yarn') {
-      lines.push(
-        `where yarn >nul 2>&1 || npm install -g yarn`,
-        `yarn -v`
-      );
-    }
-
-    if (project.packageManager === 'npm') {
-      lines.push(`npm -v`);
-    }
-
-    lines.push(project.script);
-    return lines.join(' && ');
+    // Windows: 直接执行用户脚本，不做额外处理
+    return project.script;
   }
 
   // Linux/Mac: 使用 nvm
