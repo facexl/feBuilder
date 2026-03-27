@@ -8,8 +8,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 9898,
-    hmr: noHmr ? false : undefined,
-    watch: noHmr ? null : undefined,
+    // hmr: noHmr ? false : undefined,
+    // watch: noHmr ? null : undefined,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
