@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
-import { spawn } from 'child_process';
+import { execa } from 'execa';
 import { readJson, writeJson } from './json-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -485,25 +485,12 @@ const startProjectExecution = async ({
 
 const isWindows = process.platform === 'win32';
 
-const escapeShellValue = (value) => {
-  if (isWindows) {
-    // Windows cmd: 用双引号包裹，转义内部双引号
-    return `"${String(value || '').replace(/"/g, '""')}"`;
-  }
-  return String(value || '').replace(/'/g, "'\\''");
-};
+const shellCommand = isWindows ? 'cmd' : 'bash';
+const shellArgs = isWindows ? ['/c'] : ['-c'];
 
 const buildEnvironmentBootstrapScript = (project) => {
   if (isWindows) {
-    // Windows CMD 脚本
     const lines = [
-      `@echo off`,
-      `echo 检查 nvm...`,
-      `where nvm >nul 2>&1`,
-      `if %errorlevel% neq 0 (`,
-      `  echo nvm 未安装，请先安装 nvm-windows`,
-      `  exit /b 1`,
-      `)`,
       `nvm install ${project.nodeVersion}`,
       `nvm use ${project.nodeVersion}`,
       `node -v`,
@@ -512,34 +499,14 @@ const buildEnvironmentBootstrapScript = (project) => {
 
     if (project.packageManager === 'pnpm') {
       lines.push(
-        `where pnpm >nul 2>&1`,
-        `if %errorlevel% neq 0 (`,
-        `  echo pnpm 未安装，正在安装...`,
-        `  where corepack >nul 2>&1`,
-        `  if %errorlevel% equ 0 (`,
-        `    corepack enable`,
-        `    corepack prepare pnpm@latest --activate`,
-        `  ) else (`,
-        `    npm install -g pnpm`,
-        `  )`,
-        `)`,
+        `where pnpm >nul 2>&1 || npm install -g pnpm`,
         `pnpm -v`
       );
     }
 
     if (project.packageManager === 'yarn') {
       lines.push(
-        `where yarn >nul 2>&1`,
-        `if %errorlevel% neq 0 (`,
-        `  echo yarn 未安装，正在安装...`,
-        `  where corepack >nul 2>&1`,
-        `  if %errorlevel% equ 0 (`,
-        `    corepack enable`,
-        `    corepack prepare yarn@stable --activate`,
-        `  ) else (`,
-        `    npm install -g yarn`,
-        `  )`,
-        `)`,
+        `where yarn >nul 2>&1 || npm install -g yarn`,
         `yarn -v`
       );
     }
@@ -549,60 +516,35 @@ const buildEnvironmentBootstrapScript = (project) => {
     }
 
     lines.push(project.script);
-    return lines.join('\n');
+    return lines.join(' && ');
   }
 
-  // Linux/Mac bash 脚本
   const lines = [
     'set -e',
-    'if [ -z "$HOME" ]; then',
-    "  echo 'HOME 未设置，无法初始化 nvm' >&2",
-    '  exit 1',
-    'fi',
     'export NVM_DIR="$HOME/.nvm"',
-    'if [ ! -s "$NVM_DIR/nvm.sh" ]; then',
-    "  echo '未找到 nvm，请先在部署环境安装 nvm' >&2",
-    '  exit 1',
-    'fi',
-    '. "$NVM_DIR/nvm.sh"',
-    `nvm install ${escapeShellValue(project.nodeVersion)}`,
-    `nvm use ${escapeShellValue(project.nodeVersion)}`,
+    '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
+    `nvm install ${project.nodeVersion}`,
+    `nvm use ${project.nodeVersion}`,
     'node -v',
     'npm -v',
   ];
 
   if (project.packageManager === 'pnpm') {
     lines.push(
-      "if ! command -v pnpm >/dev/null 2>&1; then",
-      "  echo 'pnpm 未安装，正在安装...'",
-      '  if command -v corepack >/dev/null 2>&1; then',
-      '    corepack enable',
-      '    corepack prepare pnpm@latest --activate',
-      '  else',
-      '    npm install -g pnpm',
-      '  fi',
-      'fi',
+      'command -v pnpm >/dev/null 2>&1 || npm install -g pnpm',
       'pnpm -v'
     );
   }
 
   if (project.packageManager === 'yarn') {
     lines.push(
-      "if ! command -v yarn >/dev/null 2>&1; then",
-      "  echo 'yarn 未安装，正在安装...'",
-      '  if command -v corepack >/dev/null 2>&1; then',
-      '    corepack enable',
-      '    corepack prepare yarn@stable --activate',
-      '  else',
-      '    npm install -g yarn',
-      '  fi',
-      'fi',
+      'command -v yarn >/dev/null 2>&1 || npm install -g yarn',
       'yarn -v'
     );
   }
 
   if (project.packageManager === 'npm') {
-    lines.push('command -v npm >/dev/null 2>&1', 'npm -v');
+    lines.push('npm -v');
   }
 
   lines.push(project.script);
@@ -823,97 +765,76 @@ const executeProjectScript = async (project, user) => {
     `[${new Date().toISOString()}] 准备执行脚本\n临时目录：${tempDir}\n项目类型：${project.type}\nNode.js：${project.nodeVersion}\n包管理工具：${project.packageManager}\n操作系统：${isWindows ? 'Windows' : 'Unix'}\n\n`
   );
 
-  const shellOptions = isWindows
-    ? { shell: 'cmd.exe', shellArgs: ['/c'] }
-    : { shell: true };
+  const script = buildEnvironmentBootstrapScript(project);
+  
+  appendExecutionLog(
+    execution,
+    `执行脚本内容:\n${script}\n\n`
+  );
 
-  const child = spawn(buildEnvironmentBootstrapScript(project), {
+  const childProcess = execa.command(script, {
     cwd: tempDir,
-    ...shellOptions,
+    shell: isWindows ? 'cmd.exe' : '/bin/bash',
     env: process.env,
-  });
-  runtime.child = child;
-  let finished = false;
-
-  const handleChunk = (prefix) => (data) => {
-    appendExecutionLog(
-      execution,
-      `[${new Date().toISOString()}] ${prefix}\n${String(data)}`
-    );
-  };
-
-  child.stdout.on('data', handleChunk('stdout'));
-  child.stderr.on('data', handleChunk('stderr'));
-
-  child.on('error', async (error) => {
-    if (finished) return;
-    finished = true;
-    execution.status = 'error';
-    execution.endedAt = new Date().toISOString();
-    execution.exitCode = -1;
-    appendExecutionLog(
-      execution,
-      `\n[${execution.endedAt}] 执行进程启动失败\n${error.stack || error.message}\n`
-    );
-
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    } finally {
-      appendExecutionLog(
-        execution,
-        `[${new Date().toISOString()}] 临时目录已清理：${tempDir}\n`
-      );
-      runningExecutions.delete(project.id);
-      await finalizeExecution(execution);
-      await createAuditLog({
-        actorAccount: user.account,
-        action: 'execution_error',
-        targetType: 'project',
-        targetId: project.id,
-        detail: `${project.name} 执行启动失败`,
-      });
-    }
+    all: true,
+    reject: false,
   });
 
-  child.on('close', async (code, signal) => {
-    if (finished) return;
-    finished = true;
+  runtime.child = childProcess;
+
+  childProcess.all.on('data', (data) => {
+    appendExecutionLog(
+      execution,
+      `[${new Date().toISOString()}] output\n${String(data)}`
+    );
+  });
+
+  try {
+    const result = await childProcess;
+    
     execution.status = execution.stopRequested
       ? 'stopped'
-      : code === 0
+      : result.exitCode === 0
         ? 'success'
         : 'error';
     execution.endedAt = new Date().toISOString();
-    execution.exitCode = code ?? signal ?? null;
+    execution.exitCode = result.exitCode;
     appendExecutionLog(
       execution,
-      `\n[${execution.endedAt}] 脚本执行结束，退出码：${code}\n`
+      `\n[${execution.endedAt}] 脚本执行结束，退出码：${result.exitCode}\n`
     );
+  } catch (error) {
+    execution.status = 'error';
+    execution.endedAt = new Date().toISOString();
+    execution.exitCode = error.exitCode ?? -1;
+    appendExecutionLog(
+      execution,
+      `\n[${execution.endedAt}] 执行失败\n${error.message}\n`
+    );
+  }
 
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-      appendExecutionLog(
-        execution,
-        `[${new Date().toISOString()}] 临时目录已清理：${tempDir}\n`
-      );
-    } catch (error) {
-      execution.status = 'error';
-      appendExecutionLog(
-        execution,
-        `[${new Date().toISOString()}] 清理临时目录失败\n${error.stack || error.message}\n`
-      );
-    } finally {
-      runningExecutions.delete(project.id);
-      await finalizeExecution(execution);
-      await createAuditLog({
-        actorAccount: user.account,
-        action: execution.status === 'success' ? 'execution_success' : 'execution_finish',
-        targetType: 'project',
-        targetId: project.id,
-        detail: `${project.name} 执行结束，状态：${execution.status}，退出码：${execution.exitCode}`,
-      });
-    }
-  });
+  try {
+    await fs.rm(tempDir, { recursive: true, force: true });
+    appendExecutionLog(
+      execution,
+      `[${new Date().toISOString()}] 临时目录已清理：${tempDir}\n`
+    );
+  } catch (error) {
+    appendExecutionLog(
+      execution,
+      `[${new Date().toISOString()}] 清理临时目录失败\n${error.message}\n`
+    );
+  } finally {
+    runningExecutions.delete(project.id);
+    await finalizeExecution(execution);
+    await createAuditLog({
+      actorAccount: user.account,
+      action: execution.status === 'success' ? 'execution_success' : execution.status === 'stopped' ? 'execution_stop' : 'execution_error',
+      targetType: 'project',
+      targetId: project.id,
+      detail: `${project.name} 执行结束，状态：${execution.status}，退出码：${execution.exitCode}`,
+    });
+  }
 
   return execution;
 };
