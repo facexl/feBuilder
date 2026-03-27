@@ -38,7 +38,7 @@ const repoBranchError = ref('');
 const showProjectModal = ref(false);
 const showExecutionModal = ref(false);
 const showUserModal = ref(false);
-const isExecutionFullscreen = ref(false);
+const isExecutionFullscreen = ref(true);
 const initialProjectEnv = route.query.env === 'production' ? 'production' : 'testing';
 const projectTypeFilter = ref(initialProjectEnv);
 const organizationFilter = ref('');
