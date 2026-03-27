@@ -772,9 +772,9 @@ const executeProjectScript = async (project, user) => {
     `执行脚本内容:\n${script}\n\n`
   );
 
-  const childProcess = execa.command(script, {
+  const childProcess = execa(script, {
     cwd: tempDir,
-    shell: isWindows ? 'cmd.exe' : '/bin/bash',
+    shell: true,
     env: process.env,
     all: true,
     reject: false,
