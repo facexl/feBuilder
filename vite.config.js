@@ -9,7 +9,7 @@ export default defineConfig({
     port: 9898,
     watch: {
       // 忽略特定文件的监听
-      ignored: ['data/**','**/data/**']
+      ignored: ['data/**','**/data/**','.build/**','**/.build/**']
     },
     proxy: {
       '/api': {
