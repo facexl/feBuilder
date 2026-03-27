@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
-import { execa } from 'execa';
+import { exec } from 'child_process';
 import { readJson, writeJson } from './json-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -490,9 +490,8 @@ const shellArgs = isWindows ? ['/c'] : ['-c'];
 
 const buildEnvironmentBootstrapScript = (project) => {
   if (isWindows) {
+    // Windows: 直接使用系统已安装的 Node.js，不依赖 nvm
     const lines = [
-      `nvm install ${project.nodeVersion}`,
-      `nvm use ${project.nodeVersion}`,
       `node -v`,
       `npm -v`,
     ];
@@ -519,6 +518,7 @@ const buildEnvironmentBootstrapScript = (project) => {
     return lines.join(' && ');
   }
 
+  // Linux/Mac: 使用 nvm
   const lines = [
     'set -e',
     'export NVM_DIR="$HOME/.nvm"',
@@ -772,29 +772,40 @@ const executeProjectScript = async (project, user) => {
     `执行脚本内容:\n${script}\n\n`
   );
 
-  const shellOptions = isWindows
-    ? { shell: 'cmd.exe', shellArgs: ['/d', '/s', '/c'] }
-    : { shell: true };
+  const execPromise = new Promise((resolve, reject) => {
+    const child = exec(script, {
+      cwd: tempDir,
+      env: process.env,
+      maxBuffer: 10 * 1024 * 1024, // 10MB
+    });
 
-  const childProcess = execa(script, {
-    cwd: tempDir,
-    ...shellOptions,
-    env: process.env,
-    all: true,
-    reject: false,
-  });
+    runtime.child = child;
 
-  runtime.child = childProcess;
+    child.stdout.on('data', (data) => {
+      appendExecutionLog(
+        execution,
+        `[${new Date().toISOString()}] stdout\n${data}`
+      );
+    });
 
-  childProcess.all.on('data', (data) => {
-    appendExecutionLog(
-      execution,
-      `[${new Date().toISOString()}] output\n${String(data)}`
-    );
+    child.stderr.on('data', (data) => {
+      appendExecutionLog(
+        execution,
+        `[${new Date().toISOString()}] stderr\n${data}`
+      );
+    });
+
+    child.on('close', (code) => {
+      resolve({ exitCode: code });
+    });
+
+    child.on('error', (error) => {
+      reject(error);
+    });
   });
 
   try {
-    const result = await childProcess;
+    const result = await execPromise;
     
     execution.status = execution.stopRequested
       ? 'stopped'
@@ -810,7 +821,7 @@ const executeProjectScript = async (project, user) => {
   } catch (error) {
     execution.status = 'error';
     execution.endedAt = new Date().toISOString();
-    execution.exitCode = error.exitCode ?? -1;
+    execution.exitCode = -1;
     appendExecutionLog(
       execution,
       `\n[${execution.endedAt}] 执行失败\n${error.message}\n`
