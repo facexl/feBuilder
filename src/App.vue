@@ -618,7 +618,7 @@ const stopProject = async (project) => {
 const openProjectHistory = async (projectId) => {
   selectedProjectId.value = projectId;
   await fetchProjectExecutions(projectId);
-  isExecutionFullscreen.value = false;
+  isExecutionFullscreen.value = true;
   showExecutionModal.value = true;
   updateProjectPolling();
 };
