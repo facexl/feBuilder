@@ -745,6 +745,7 @@ const executeProjectScript = async (project, user) => {
     `执行脚本内容:\n${script}\n\n`
   );
 
+  // 在后台执行脚本，不等待完成
   const execPromise = new Promise((resolve, reject) => {
     const child = exec(script, {
       cwd: tempDir,
@@ -777,9 +778,8 @@ const executeProjectScript = async (project, user) => {
     });
   });
 
-  try {
-    const result = await execPromise;
-    
+  // 异步处理执行结果，不阻塞返回
+  execPromise.then(async (result) => {
     execution.status = execution.stopRequested
       ? 'stopped'
       : result.exitCode === 0
@@ -791,7 +791,7 @@ const executeProjectScript = async (project, user) => {
       execution,
       `\n[${execution.endedAt}] 脚本执行结束，退出码：${result.exitCode}\n`
     );
-  } catch (error) {
+  }).catch(async (error) => {
     execution.status = 'error';
     execution.endedAt = new Date().toISOString();
     execution.exitCode = -1;
@@ -799,31 +799,32 @@ const executeProjectScript = async (project, user) => {
       execution,
       `\n[${execution.endedAt}] 执行失败\n${error.message}\n`
     );
-  }
+  }).finally(async () => {
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+      appendExecutionLog(
+        execution,
+        `[${new Date().toISOString()}] 临时目录已清理：${tempDir}\n`
+      );
+    } catch (error) {
+      appendExecutionLog(
+        execution,
+        `[${new Date().toISOString()}] 清理临时目录失败\n${error.message}\n`
+      );
+    } finally {
+      runningExecutions.delete(project.id);
+      await finalizeExecution(execution);
+      await createAuditLog({
+        actorAccount: user.account,
+        action: execution.status === 'success' ? 'execution_success' : execution.status === 'stopped' ? 'execution_stop' : 'execution_error',
+        targetType: 'project',
+        targetId: project.id,
+        detail: `${project.name} 执行结束，状态：${execution.status}，退出码：${execution.exitCode}`,
+      });
+    }
+  });
 
-  try {
-    await fs.rm(tempDir, { recursive: true, force: true });
-    appendExecutionLog(
-      execution,
-      `[${new Date().toISOString()}] 临时目录已清理：${tempDir}\n`
-    );
-  } catch (error) {
-    appendExecutionLog(
-      execution,
-      `[${new Date().toISOString()}] 清理临时目录失败\n${error.message}\n`
-    );
-  } finally {
-    runningExecutions.delete(project.id);
-    await finalizeExecution(execution);
-    await createAuditLog({
-      actorAccount: user.account,
-      action: execution.status === 'success' ? 'execution_success' : execution.status === 'stopped' ? 'execution_stop' : 'execution_error',
-      targetType: 'project',
-      targetId: project.id,
-      detail: `${project.name} 执行结束，状态：${execution.status}，退出码：${execution.exitCode}`,
-    });
-  }
-
+  // 立即返回执行记录，不等待脚本执行完成
   return execution;
 };
 
