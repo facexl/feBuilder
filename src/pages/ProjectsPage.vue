@@ -164,6 +164,7 @@ const dashboard = useDashboard();
                 <button class="mini-btn" @click="dashboard.openProjectHistory(project.id)">
                   详情
                 </button>
+                <button class="mini-btn" @click="dashboard.copyProject(project)">复制</button>
                 <button class="mini-btn" @click="dashboard.editProject(project)">编辑</button>
                 <button class="mini-btn danger" @click="dashboard.removeProject(project.id)">
                   删除

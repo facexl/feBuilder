@@ -555,6 +555,25 @@ const editProject = (project) => {
   showProjectModal.value = true;
 };
 
+const copyProject = (project) => {
+  projectForm.id = ''; // 清空 id 表示新建
+  projectForm.name = `${project.name} - 副本`;
+  projectForm.type = project.type || 'testing';
+  projectForm.nodeVersion =
+    project.nodeVersion || projectOptions.value.nodeVersions[0] || '20.20.1';
+  projectForm.packageManager =
+    project.packageManager || projectOptions.value.packageManagers[0] || 'pnpm';
+  projectForm.autoBuildEnabled = Boolean(project.autoBuildEnabled);
+  projectForm.repoSshUrl = project.repoSshUrl || '';
+  projectForm.watchBranch = project.watchBranch || '';
+  projectForm.script = project.script;
+  projectForm.organizationId = project.organizationId || '';
+  projectForm.newOrganizationName = '';
+  mergeRepoBranches([], project.watchBranch || '');
+  repoBranchError.value = '';
+  showProjectModal.value = true;
+};
+
 const removeProject = async (id) => {
   const confirmed = window.confirm('删除项目后，项目权限和执行历史都会被移除。确认删除吗？');
   if (!confirmed) return;
@@ -773,6 +792,7 @@ provide(dashboardKey, {
   openCreateProjectModal,
   openCreateUserModal,
   editProject,
+  copyProject,
   editUser,
   removeProject,
   removeUser,
