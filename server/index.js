@@ -28,7 +28,7 @@ const AUTO_BUILD_SCAN_WINDOW_START_MINUTE = 8 * 60;
 const AUTO_BUILD_SCAN_WINDOW_END_MINUTE = 22 * 60;
 
 const app = express();
-const port = 3000;
+const port = 3001;
 const sessions = new Map();
 const runningExecutions = new Map();
 const projectErrorCounts = new Map(); // 项目连续错误计数

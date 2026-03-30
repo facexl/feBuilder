@@ -43,7 +43,7 @@ pnpm install
 # 启动前端开发服务器（端口 5173）
 pnpm dev
 
-# 启动后端服务器（端口 3000）
+# 启动后端服务器（端口 3001）
 pnpm server
 ```
 
@@ -59,7 +59,7 @@ pnpm build
 pnpm server
 ```
 
-访问 http://localhost:3000
+访问 http://localhost:3001
 
 ## 默认账户
 
@@ -76,10 +76,10 @@ pnpm server
 
 ### 服务器配置
 
-默认端口为 `3000`，可在 `server/index.js` 中修改：
+默认端口为 `3001`，可在 `server/index.js` 中修改：
 
 ```javascript
-const port = 3000;
+const port = 3001;
 ```
 
 ### 自动构建时间窗口
@@ -221,7 +221,7 @@ tar -xzf backup-20240101.tar.gz
 A: 可以正常运行。系统会自动重建所有数据文件，恢复为初始状态（只有默认管理员账户）。
 
 ### Q: 如何修改端口？
-A: 编辑 `server/index.js`，修改 `const port = 3000;` 为你需要的端口。
+A: 编辑 `server/index.js`，修改 `const port = 3001;` 为你需要的端口。
 
 ### Q: 自动构建不工作？
 A: 检查以下几点：
