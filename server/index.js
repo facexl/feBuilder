@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { readJson, writeJson } from './json-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
