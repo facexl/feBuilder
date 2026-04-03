@@ -461,8 +461,7 @@ const shouldRunAutoBuildScan = (date = new Date()) => {
 
   return (
     currentMinute >= AUTO_BUILD_SCAN_WINDOW_START_MINUTE &&
-    currentMinute <= AUTO_BUILD_SCAN_WINDOW_END_MINUTE &&
-    currentMinute % 3 === 0
+    currentMinute <= AUTO_BUILD_SCAN_WINDOW_END_MINUTE
   );
 };
 
