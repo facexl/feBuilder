@@ -39,9 +39,13 @@ const showProjectModal = ref(false);
 const showExecutionModal = ref(false);
 const showUserModal = ref(false);
 const isExecutionFullscreen = ref(true);
-const initialProjectEnv = route.query.env === 'production' ? 'production' : 'testing';
-const projectTypeFilter = ref(initialProjectEnv);
-const organizationFilter = ref('');
+const urlEnv = route.query.env === 'production' ? 'production' : 'testing';
+const savedEnv = sessionStorage.getItem('projectTypeFilter') || urlEnv;
+const projectTypeFilter = ref(savedEnv);
+const organizationFilter = ref(
+  sessionStorage.getItem(`organizationFilter_${savedEnv}`) || ''
+);
+let isInitialized = false;
 const projectOptions = ref({
   projectTypes: ['production', 'testing'],
   nodeVersions: ['16.16.0', '18.16.0', '22.22.0', '24.14.0', '20.20.1'],
@@ -851,7 +855,10 @@ watch(selectedProjectId, async (projectId, oldProjectId) => {
 });
 
 watch(projectTypeFilter, async (env) => {
+  if (!isInitialized) return;
+  sessionStorage.setItem('projectTypeFilter', env);
   organizationFilter.value = '';
+  sessionStorage.setItem(`organizationFilter_${env}`, '');
   if (route.path !== '/projects') return;
 
   if (route.query.env !== env) {
@@ -859,6 +866,12 @@ watch(projectTypeFilter, async (env) => {
       path: '/projects',
       query: { env },
     });
+  }
+});
+
+watch(organizationFilter, (orgId) => {
+  if (isInitialized) {
+    sessionStorage.setItem(`organizationFilter_${projectTypeFilter.value}`, orgId || '');
   }
 });
 
@@ -891,7 +904,11 @@ watch(
     if (route.path !== '/projects') return;
     const nextEnv = env === 'production' ? 'production' : 'testing';
     if (projectTypeFilter.value !== nextEnv) {
+      sessionStorage.setItem('projectTypeFilter', nextEnv);
       projectTypeFilter.value = nextEnv;
+      if (isInitialized) {
+        organizationFilter.value = sessionStorage.getItem(`organizationFilter_${nextEnv}`) || '';
+      }
     }
   }
 );
@@ -906,6 +923,7 @@ onMounted(async () => {
 
   try {
     await loadDashboard();
+    isInitialized = true;
   } catch {
     handleLogout();
   }
