@@ -486,8 +486,55 @@ const isWindows = process.platform === 'win32';
 
 const buildEnvironmentBootstrapScript = (project) => {
   if (isWindows) {
-    // Windows: 直接执行用户脚本，不做额外处理
-    return project.script;
+    // Windows: 生成批处理脚本，内部调用 nvm for Windows
+    const lines = [
+      '@echo off',
+      'setlocal enabledelayedexpansion',
+      `set NODE_VERSION=${project.nodeVersion}`,
+      '',
+      'echo [1/5] Installing Node.js %NODE_VERSION%...',
+      `nvm install %NODE_VERSION%`,
+      'if %errorlevel% neq 0 exit /b %errorlevel%',
+      '',
+      'echo [2/5] Switching to Node.js %NODE_VERSION%...',
+      `nvm use %NODE_VERSION%`,
+      'if %errorlevel% neq 0 exit /b %errorlevel%',
+      '',
+      'echo [3/5] Verifying Node.js...',
+      'node -v',
+      'if %errorlevel% neq 0 exit /b %errorlevel%',
+      'npm -v',
+      'if %errorlevel% neq 0 exit /b %errorlevel%',
+    ];
+
+    // 包管理器准备（与 Unix 分支逻辑一致）
+    if (project.packageManager === 'pnpm') {
+      lines.push(
+        '',
+        'echo [4/5] Ensuring pnpm is installed...',
+        'where pnpm >nul 2>nul || npm install -g pnpm',
+        'if %errorlevel% neq 0 exit /b %errorlevel%',
+        'pnpm -v'
+      );
+    } else if (project.packageManager === 'yarn') {
+      lines.push(
+        '',
+        'echo [4/5] Ensuring yarn is installed...',
+        'where yarn >nul 2>nul || npm install -g yarn',
+        'if %errorlevel% neq 0 exit /b %errorlevel%',
+        'yarn -v'
+      );
+    } else {
+      lines.push('', 'echo [4/5] Using npm...', 'npm -v');
+    }
+
+    lines.push(
+      '',
+      'echo [5/5] Executing user script...',
+      project.script
+    );
+
+    return lines.join('\r\n'); // 批处理使用 CRLF 换行
   }
 
   // Linux/Mac: 使用 nvm
