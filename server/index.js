@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
-import { exec, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { readJson, writeJson } from './json-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -551,6 +551,28 @@ const buildEnvironmentBootstrapScript = (project) => {
   return lines.join('\n');
 };
 
+const getBootstrapFileName = () => (isWindows ? 'bootstrap.cmd' : 'bootstrap.sh');
+
+const getBootstrapSpawnOptions = (bootstrapFilePath, cwd) =>
+  isWindows
+    ? {
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', bootstrapFilePath],
+        options: {
+          cwd,
+          env: process.env,
+          windowsHide: true,
+        },
+      }
+    : {
+        command: 'sh',
+        args: [bootstrapFilePath],
+        options: {
+          cwd,
+          env: process.env,
+        },
+      };
+
 const finalizeExecution = async (execution) => {
   const executions = await getExecutions();
   updateExecutionSummary(execution);
@@ -766,19 +788,22 @@ const executeProjectScript = async (project, user) => {
   );
 
   const script = buildEnvironmentBootstrapScript(project);
+  const bootstrapFilePath = path.join(tempDir, getBootstrapFileName());
   
   appendExecutionLog(
     execution,
-    `执行脚本内容:\n${script}\n\n`
+    `执行脚本文件：${bootstrapFilePath}\n执行脚本内容:\n${script}\n\n`
   );
+
+  await fs.writeFile(bootstrapFilePath, script, 'utf8');
 
   // 在后台执行脚本，不等待完成
   const execPromise = new Promise((resolve, reject) => {
-    const child = exec(script, {
-      cwd: tempDir,
-      env: process.env,
-      maxBuffer: 10 * 1024 * 1024, // 10MB
-    });
+    const { command, args, options } = getBootstrapSpawnOptions(
+      bootstrapFilePath,
+      tempDir
+    );
+    const child = spawn(command, args, options);
 
     runtime.child = child;
 
