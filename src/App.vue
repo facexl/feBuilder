@@ -1094,7 +1094,7 @@ onBeforeUnmount(() => {
                 <span>仓库 SSH 地址</span>
                 <input
                   v-model.trim="projectForm.repoSshUrl"
-                  placeholder="例如：git@gitee.com:team/app.git"
+                  placeholder="例如：ssh://git@gitee.com:team/app.git"
                 />
               </label>
 
