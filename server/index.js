@@ -486,8 +486,36 @@ const isWindows = process.platform === 'win32';
 
 const buildEnvironmentBootstrapScript = (project) => {
   if (isWindows) {
-    // Windows: 直接执行用户脚本，不做额外处理
-    return project.script;
+    const lines = ['@echo off'];
+    const appendCheckedCommand = (command) => {
+      lines.push(command, 'if errorlevel 1 exit /b %errorlevel%');
+    };
+
+    appendCheckedCommand(`nvm install ${project.nodeVersion}`);
+    appendCheckedCommand(`nvm use ${project.nodeVersion}`);
+    appendCheckedCommand('node -v');
+    appendCheckedCommand('call npm -v');
+
+    if (project.packageManager === 'pnpm') {
+      lines.push('where pnpm >nul 2>nul');
+      lines.push('if errorlevel 1 call npm install -g pnpm');
+      lines.push('if errorlevel 1 exit /b %errorlevel%');
+      appendCheckedCommand('call pnpm -v');
+    }
+
+    if (project.packageManager === 'yarn') {
+      lines.push('where yarn >nul 2>nul');
+      lines.push('if errorlevel 1 call npm install -g yarn');
+      lines.push('if errorlevel 1 exit /b %errorlevel%');
+      appendCheckedCommand('call yarn -v');
+    }
+
+    if (project.packageManager === 'npm') {
+      appendCheckedCommand('call npm -v');
+    }
+
+    lines.push(project.script);
+    return lines.join('\r\n');
   }
 
   // Linux/Mac: 使用 nvm
